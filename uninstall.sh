@@ -7,26 +7,26 @@
 
 set -euo pipefail
 
-APPIMAGE_NAME="Zalo-26.6.11+ZaDark-26.2-0af5695.AppImage"
-DEST_DIR="$HOME/Applications"
 GEARLEVER_APP_ID="it.mijorus.gearlever"
 
 log()  { echo -e "==> $*"; }
 warn() { echo -e "!!  $*" >&2; }
 
-log "Removing Gear Lever integration..."
-if { yes || true; } 2>/dev/null | flatpak run "$GEARLEVER_APP_ID" --remove "$DEST_DIR/$APPIMAGE_NAME"; then
-  log "Desktop integration removed."
-else
-  warn "Gear Lever removal failed or app was not integrated -- continuing."
-fi
+log "Looking up Zalo in Gear Lever..."
+ZALO_PATH=$(flatpak run "$GEARLEVER_APP_ID" --list-installed 2>/dev/null | grep -i "zalo" | awk '{print $NF}')
 
-log "Removing AppImage..."
-if [ -f "$DEST_DIR/$APPIMAGE_NAME" ]; then
-  rm -f "$DEST_DIR/$APPIMAGE_NAME"
-  log "Removed $DEST_DIR/$APPIMAGE_NAME."
+if [ -z "$ZALO_PATH" ]; then
+  warn "Zalo not found in Gear Lever -- may already be removed."
 else
-  warn "AppImage not found at $DEST_DIR/$APPIMAGE_NAME -- skipping."
+  log "Found at: $ZALO_PATH"
+  log "Removing Gear Lever integration..."
+  if { yes || true; } 2>/dev/null | flatpak run "$GEARLEVER_APP_ID" --remove "$ZALO_PATH"; then
+    log "Desktop integration and AppImage removed."
+  else
+    warn "Gear Lever removal failed -- removing AppImage manually..."
+    rm -f "$ZALO_PATH"
+    log "Removed $ZALO_PATH."
+  fi
 fi
 
 log "Done! Zalo has been uninstalled."
