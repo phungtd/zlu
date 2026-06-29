@@ -2,11 +2,24 @@
 # install.sh — Installs Flatpak + Gear Lever, downloads the ZaDark Zalo AppImage,
 # and integrates it into the system menu. Fully non-interactive.
 #
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/phungtd/zlu/main/install.sh | bash
+# Usage (recommended — exports XDG_DATA_DIRS into your current shell):
+#   . <(wget -qO- https://raw.githubusercontent.com/phungtd/zlu/main/install.sh)
+#
+# Alternative (XDG_DATA_DIRS won't persist in current shell):
 #   wget -qO- https://raw.githubusercontent.com/phungtd/zlu/main/install.sh | bash
 
 set -euo pipefail
+
+# When sourced, 'exit' would kill the terminal; use 'return' instead.
+# Also restore shell options on exit so sourcing doesn't pollute the parent shell.
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+  SOURCED=1
+  _saved_opts=$(set +o)
+  trap 'eval "$_saved_opts"; unset _saved_opts SOURCED' RETURN
+else
+  SOURCED=0
+fi
+die() { warn "$*"; [[ $SOURCED -eq 1 ]] && return 1 || exit 1; }
 
 APPIMAGE_URL="https://github.com/doandat943/zalo-for-linux/releases/download/26.6.11/Zalo-26.6.11+ZaDark-26.2-0af5695.AppImage"
 APPIMAGE_NAME="Zalo-26.6.11+ZaDark-26.2-0af5695.AppImage"
@@ -89,7 +102,7 @@ if ! flatpak run "$GEARLEVER_APP_ID" --integrate "$DEST_DIR/$APPIMAGE_NAME"; the
   warn "Gear Lever integration failed."
   warn "If FUSE-related: dpkg -s ${FUSE_PKG:-libfuse2t64} and re-run."
   warn "Workaround: $DEST_DIR/$APPIMAGE_NAME --appimage-extract-and-run"
-  exit 1
+  die "Integration failed."
 fi
 
 log "Done! Zalo installed at: $DEST_DIR/$APPIMAGE_NAME"
