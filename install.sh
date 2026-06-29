@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# install.sh
-# Installs Flatpak + Gear Lever, ensures FUSE is available (most AppImages
-# still need it to launch), downloads the ZaDark Zalo AppImage, and
-# integrates it into the system menu. Fully non-interactive.
+# install.sh — Installs Flatpak + Gear Lever, downloads the ZaDark Zalo AppImage,
+# and integrates it into the system menu. Fully non-interactive.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/phungtd/zlu/main/install.sh | bash
@@ -18,8 +16,7 @@ GEARLEVER_APP_ID="it.mijorus.gearlever"
 log()  { echo -e "==> $*"; }
 warn() { echo -e "!!  $*" >&2; }
 
-# Prefix for commands that need root, without re-execing the whole script
-# (this keeps $HOME pointing at the invoking user, not root).
+# Use sudo only when not already root (keeps $HOME pointing at the invoking user).
 if [ "$(id -u)" -ne 0 ]; then
   SUDO="sudo"
 else
@@ -38,24 +35,13 @@ fi
 
 log "Configuring XDG_DATA_DIRS for Flatpak desktop exports..."
 FLATPAK_EXPORT_DIRS="/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share"
-
-# Make exports visible for the rest of THIS script run (covers gtk-launch /
-# desktop-file lookups Gear Lever may trigger during integration below).
 export XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}:$FLATPAK_EXPORT_DIRS"
 
-# Persist it so future login sessions pick up newly installed Flatpak apps
-# automatically, without the user having to log out/in or fix it by hand.
-# (apt's flatpak package usually ships /etc/profile.d/flatpak.sh for this,
-# but that only takes effect on next login -- add an idempotent fallback too,
-# in case the session type doesn't source profile.d, e.g. some SSH shells.)
-PROFILE_LINE='export XDG_DATA_DIRS="$XDG_DATA_DIRS:/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share"'
+# Persist for future login sessions (fallback in case profile.d isn't sourced).
+PROFILE_LINE="export XDG_DATA_DIRS=\"\$XDG_DATA_DIRS:$FLATPAK_EXPORT_DIRS\""
 for rc in "$HOME/.profile" "$HOME/.bashrc"; do
   if [ -f "$rc" ] && ! grep -qF "flatpak/exports/share" "$rc"; then
-    {
-      echo ''
-      echo '# Added by zlu/install.sh: make Flatpak app exports visible to the desktop menu'
-      echo "$PROFILE_LINE"
-    } >> "$rc"
+    { echo ''; echo '# Added by zlu/install.sh'; echo "$PROFILE_LINE"; } >> "$rc"
     log "Added Flatpak export path to $rc (takes effect on next login)."
   fi
 done
@@ -65,9 +51,7 @@ update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || tru
 $SUDO update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 
 log "Checking for FUSE (libfuse2)..."
-# Ubuntu 24.04+ renamed the package to libfuse2t64; older releases use libfuse2.
-# Most Type 2 AppImages still need this to mount/run even though newer Gear
-# Lever builds (4.5+, uruntime-based) no longer require it for their own UI.
+# Ubuntu 24.04+ renamed libfuse2 → libfuse2t64; AppImages still need it.
 FUSE_PKG=""
 if apt-cache show libfuse2t64 >/dev/null 2>&1; then
   FUSE_PKG="libfuse2t64"
@@ -80,10 +64,10 @@ if [ -n "$FUSE_PKG" ]; then
     log "$FUSE_PKG already installed, skipping."
   else
     log "Installing $FUSE_PKG..."
-    $SUDO apt-get install -y "$FUSE_PKG" || warn "$FUSE_PKG install failed -- the AppImage may refuse to launch with a 'requires FUSE' error."
+    $SUDO apt-get install -y "$FUSE_PKG" || warn "$FUSE_PKG install failed -- AppImage may not launch."
   fi
 else
-  warn "No libfuse2/libfuse2t64 package found via apt-cache. If the AppImage fails to launch later, install FUSE manually."
+  warn "libfuse2/libfuse2t64 not found. Install FUSE manually if the AppImage fails to launch."
 fi
 
 log "Adding Flathub remote (if missing)..."
@@ -101,12 +85,12 @@ wget -q --show-progress -O "$APPIMAGE_NAME" "$APPIMAGE_URL"
 chmod +x "$APPIMAGE_NAME"
 
 log "Integrating with Gear Lever..."
-if ! flatpak run "$GEARLEVER_APP_ID" --integrate "$DEST_DIR/$APPIMAGE_NAME"; then
+if ! flatpak run --env=XDG_DATA_DIRS="$XDG_DATA_DIRS" "$GEARLEVER_APP_ID" --integrate "$DEST_DIR/$APPIMAGE_NAME"; then
   warn "Gear Lever integration failed."
-  warn "If the error mentions FUSE, confirm $FUSE_PKG installed correctly (dpkg -s $FUSE_PKG) and re-run."
-  warn "As a workaround you can also launch directly with: $DEST_DIR/$APPIMAGE_NAME --appimage-extract-and-run"
+  warn "If FUSE-related: dpkg -s ${FUSE_PKG:-libfuse2t64} and re-run."
+  warn "Workaround: $DEST_DIR/$APPIMAGE_NAME --appimage-extract-and-run"
   exit 1
 fi
 
-log "Done! Zalo AppImage installed at: $DEST_DIR/$APPIMAGE_NAME"
-log "You should now find it in your application menu."
+log "Done! Zalo installed at: $DEST_DIR/$APPIMAGE_NAME"
+log "Find it in your application menu."
