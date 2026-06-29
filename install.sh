@@ -12,7 +12,7 @@ set -euo pipefail
 
 # When sourced, 'exit' would kill the terminal; use 'return' instead.
 # Also restore shell options on exit so sourcing doesn't pollute the parent shell.
-if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+if [[ -n "${BASH_SOURCE[0]}" && "${BASH_SOURCE[0]}" != "${0}" ]]; then
   SOURCED=1
   _saved_opts=$(set +o)
   trap 'eval "$_saved_opts"; unset _saved_opts SOURCED' RETURN
@@ -37,7 +37,7 @@ else
 fi
 
 log "Updating package lists..."
-$SUDO apt-get update -y
+$SUDO apt-get update
 
 log "Installing Flatpak..."
 if ! command -v flatpak >/dev/null 2>&1; then
@@ -91,14 +91,13 @@ $SUDO flatpak install -y --noninteractive --or-update flathub "$GEARLEVER_APP_ID
 
 log "Preparing download directory: $DEST_DIR"
 mkdir -p "$DEST_DIR"
-cd "$DEST_DIR"
 
 log "Downloading Zalo AppImage..."
-wget -q --show-progress -O "$APPIMAGE_NAME" "$APPIMAGE_URL"
-chmod +x "$APPIMAGE_NAME"
+wget -q --show-progress -O "$DEST_DIR/$APPIMAGE_NAME" "$APPIMAGE_URL"
+chmod +x "$DEST_DIR/$APPIMAGE_NAME"
 
 log "Integrating with Gear Lever..."
-if ! yes 2>/dev/null | flatpak run "$GEARLEVER_APP_ID" --integrate "$DEST_DIR/$APPIMAGE_NAME"; then
+if ! { yes || true; } 2>/dev/null | flatpak run "$GEARLEVER_APP_ID" --integrate "$DEST_DIR/$APPIMAGE_NAME"; then
   warn "Gear Lever integration failed."
   warn "If FUSE-related: dpkg -s ${FUSE_PKG:-libfuse2t64} and re-run."
   warn "Workaround: $DEST_DIR/$APPIMAGE_NAME --appimage-extract-and-run"
