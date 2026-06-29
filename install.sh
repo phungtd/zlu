@@ -85,7 +85,7 @@ wget -q --show-progress -O "$APPIMAGE_NAME" "$APPIMAGE_URL"
 chmod +x "$APPIMAGE_NAME"
 
 log "Integrating with Gear Lever..."
-if ! flatpak run --env=XDG_DATA_DIRS="$XDG_DATA_DIRS" "$GEARLEVER_APP_ID" --integrate "$DEST_DIR/$APPIMAGE_NAME"; then
+if ! flatpak run "$GEARLEVER_APP_ID" --integrate "$DEST_DIR/$APPIMAGE_NAME"; then
   warn "Gear Lever integration failed."
   warn "If FUSE-related: dpkg -s ${FUSE_PKG:-libfuse2t64} and re-run."
   warn "Workaround: $DEST_DIR/$APPIMAGE_NAME --appimage-extract-and-run"
